@@ -1,0 +1,977 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Competitor Price Tracker</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6f6d68;
+  --axis: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --ring: rgba(11,11,11,0.10);
+  --wash: rgba(11,11,11,0.04);
+  --accent: #2a78d6;
+  --accent-wash: rgba(42,120,214,0.10);
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --critical: #d03b3b;
+  --warning: #fab219;
+  /* categorical series (validated: dataviz palette, adjacent CVD dE >= 9.1 light / 8.4 dark) */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #a3a29b;
+    --axis: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --ring: rgba(255,255,255,0.10);
+    --wash: rgba(255,255,255,0.05);
+    --accent: #3987e5;
+    --accent-wash: rgba(57,135,229,0.14);
+    --good-ink: #0ca30c;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #a3a29b;
+  --axis: #898781;
+  --grid: #2c2c2a;
+  --baseline: #383835;
+  --ring: rgba(255,255,255,0.10);
+  --wash: rgba(255,255,255,0.05);
+  --accent: #3987e5;
+  --accent-wash: rgba(57,135,229,0.14);
+  --good-ink: #0ca30c;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 24px 64px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; margin-bottom: 20px; }
+h1 { font-size: 22px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 15px; font-weight: 650; margin: 0 0 4px; }
+.sub { color: var(--ink-2); margin: 4px 0 0; max-width: 760px; }
+.meta { color: var(--muted); font-size: 12.5px; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 18px 20px; }
+.section { margin-top: 18px; }
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.kpi .label { color: var(--ink-2); font-size: 12.5px; }
+.kpi .value { font-size: 26px; font-weight: 650; margin-top: 2px; }
+.kpi .note { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 18px 0 10px; }
+.filters label { color: var(--ink-2); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+select, input[type="search"] {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--ring); border-radius: 8px; padding: 6px 10px;
+}
+input[type="search"] { width: 200px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; }
+.table-wrap { overflow-x: auto; }
+/* mirrored horizontal scrollbar above the table; sticks to the top of the window while the table is in view */
+.hscroll { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 3; overflow-x: auto; overflow-y: hidden; background: var(--surface);
+  margin: -6px 0 6px; padding-top: 6px; }
+.hscroll[hidden] { display: none; }
+.hscroll > div { height: 1px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; vertical-align: middle; padding: 7px 8px; border-bottom: 1px solid var(--grid); }
+td.num, th.num, td.nowrap { white-space: nowrap; }
+td.model { min-width: 120px; }
+th { line-height: 1.25; }
+th { color: var(--ink-2); font-weight: 600; font-size: 12.5px; position: sticky; top: 0; background: var(--surface); }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--ink); }
+th .arrow { color: var(--muted); font-size: 10px; margin-left: 3px; }
+td.num, th.num { text-align: right; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--wash); }
+tbody tr.selected { background: var(--accent-wash); }
+td.model a { color: var(--ink); text-decoration: none; }
+td.model a:hover { text-decoration: underline; }
+.muted { color: var(--muted); }
+.ink2 { color: var(--ink-2); }
+.tag { display: inline-block; font-size: 11px; color: var(--ink-2); border: 1px solid var(--ring); border-radius: 999px; padding: 0 7px; margin-left: 6px; vertical-align: 1px; }
+.status { display: inline-flex; align-items: center; gap: 5px; }
+.status svg { flex: none; }
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; }
+.legend { display: flex; gap: 14px; color: var(--ink-2); font-size: 12.5px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.key { width: 16px; height: 0; border-top: 2px solid var(--accent); display: inline-block; }
+.key.list { border-top: 1.5px solid var(--axis); }
+#chart { position: relative; margin-top: 10px; }
+#chart > svg { display: block; width: 100%; overflow: visible; }
+.tooltip {
+  position: absolute; pointer-events: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--ring); border-radius: 8px; padding: 8px 10px; font-size: 12.5px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); white-space: nowrap; display: none; z-index: 2;
+}
+.tooltip .t-date { color: var(--ink-2); margin-bottom: 4px; }
+.tooltip .t-row { display: flex; align-items: center; gap: 8px; }
+.tooltip .t-row b { font-weight: 650; min-width: 72px; }
+.tooltip .t-row .k { width: 12px; border-top: 2px solid var(--accent); }
+.tooltip .t-row .k.list { border-top: 1.5px solid var(--axis); }
+.tooltip .t-row svg { flex: none; }
+.tooltip .t-row.hi b { font-weight: 750; }
+.tooltip .t-row.hi .nm { color: var(--ink); }
+.tooltip.multi { column-gap: 20px; }
+.tooltip.multi .t-date { column-span: all; }
+.tooltip.multi .t-row { break-inside: avoid; min-width: 0; }
+.tooltip.multi .t-row .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chart-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.btn { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--ring);
+  border-radius: 8px; padding: 6px 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { background: var(--wash); }
+.btn .chev { color: var(--muted); font-size: 10px; }
+.btn-link { font: inherit; font-size: 12.5px; color: var(--ink-2); background: none; border: 0; padding: 2px 4px; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--baseline); text-underline-offset: 2px; }
+.btn-link:hover { color: var(--ink); text-decoration-color: currentColor; }
+.chart-card { position: relative; }
+.picker { position: relative; }
+.pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; width: min(360px, calc(100vw - 32px));
+  max-height: 480px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--ring);
+  border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.16); }
+.pop[hidden] { display: none; }
+.pop-head { padding: 10px 12px 8px; border-bottom: 1px solid var(--grid); display: grid; gap: 8px; }
+.pop-head input[type="search"] { width: 100%; }
+.pop-actions { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; }
+.pop-actions .meta { margin-left: auto; }
+.pick-list { overflow-y: auto; padding: 4px 6px 8px; }
+.pick-brand, .pick-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.pick-brand { font-weight: 600; margin-top: 6px; }
+.pick-brand .cnt { color: var(--muted); font-weight: 400; font-size: 12px; }
+.pick-row { padding-left: 28px; }
+.pick-brand:hover, .pick-row:hover { background: var(--wash); }
+.pick-row .nm { flex: 1; min-width: 0; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-row.on .nm { color: var(--ink); }
+.pick-row .pr { color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.keyslot { width: 22px; height: 12px; flex: none; display: inline-flex; }
+input[type="checkbox"] { accent-color: var(--accent); margin: 0; }
+td.pick, th.pick { width: 1%; padding-right: 2px; }
+td.pick label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.list.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+.list.cols2 li:last-child { border-bottom: 1px solid var(--grid); }
+.mlegend { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 2px 12px; margin-top: 12px; }
+.mlegend button { font: inherit; font-size: 12.5px; color: var(--ink); background: none; border: 0; border-radius: 6px;
+  display: flex; align-items: center; gap: 8px; padding: 4px 6px; cursor: pointer; text-align: left; min-width: 0; }
+.mlegend button:hover, .mlegend button:focus-visible, .mlegend button.on { background: var(--wash); }
+.mlegend button.on { box-shadow: inset 0 0 0 1px var(--ring); }
+.mlegend svg { flex: none; }
+.mlegend .nm { color: var(--ink-2); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mlegend .pr { font-variant-numeric: tabular-nums; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 12px; }
+.facts div { font-size: 12.5px; color: var(--ink-2); }
+.facts b { display: block; color: var(--ink); font-size: 15px; font-weight: 600; }
+.list { margin: 8px 0 0; padding: 0; list-style: none; }
+.list li { padding: 7px 0; border-bottom: 1px solid var(--grid); display: flex; gap: 10px; justify-content: space-between; align-items: baseline; }
+.list li:last-child { border-bottom: 0; }
+.list .when { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.list a { color: var(--ink); text-decoration-color: var(--baseline); text-underline-offset: 2px; }
+.list a:hover { text-decoration-color: currentColor; }
+.empty { color: var(--muted); padding: 10px 0 2px; }
+.err { color: var(--ink-2); font-size: 12px; white-space: normal; word-break: break-word; }
+.foot { color: var(--muted); font-size: 12px; margin-top: 22px; line-height: 1.6; }
+.foot code { font-size: 11.5px; }
+@media (max-width: 900px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid2 { grid-template-columns: 1fr; }
+  .list.cols2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .wrap { padding: 18px 16px 48px; }
+  .picker { position: static; }
+  .pop { left: 12px; right: 12px; width: auto; top: auto; margin-top: 6px; }
+  input[type="search"] { width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Competitor price tracker</h1>
+      <p class="sub">Daily shopper-visible prices from each brand's official US store: the sale price a buyer sees on the product page, with the struck-through list price alongside.</p>
+    </div>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="filters" role="group" aria-label="Filters">
+    <label>Brand <select id="f-brand"><option value="">All brands</option></select></label>
+    <label>Technology <select id="f-tech"><option value="">All</option><option>Resin</option><option>FDM</option></select></label>
+    <label><input type="checkbox" id="f-key"> Key competitors</label>
+    <label><input type="checkbox" id="f-sale"> On sale</label>
+  </div>
+
+  <div class="card chart-card">
+    <div class="chart-head">
+      <div>
+        <h2 id="c-title">Price history</h2>
+        <div class="meta" id="c-sub"></div>
+      </div>
+      <div class="chart-tools">
+        <div class="legend" id="c-legend">
+          <span><i class="key" id="c-price-key"></i>Price</span>
+          <span><i class="key list"></i>List price</span>
+        </div>
+        <div class="picker" id="picker">
+          <button type="button" class="btn" id="pick-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="pick-pop">
+            <span id="pick-label">Choose models</span><span class="chev" aria-hidden="true">▼</span>
+          </button>
+          <div class="pop" id="pick-pop" role="dialog" aria-label="Choose models to chart" hidden>
+            <div class="pop-head">
+              <input type="search" id="pick-q" placeholder="Find a brand or model" aria-label="Find a brand or model">
+              <div class="pop-actions">
+                <button type="button" class="btn-link" data-act="key">Key competitors</button>
+                <button type="button" class="btn-link" data-act="table">Match table</button>
+                <button type="button" class="btn-link" data-act="clear">Clear</button>
+                <span class="meta" id="pick-count"></span>
+              </div>
+            </div>
+            <div class="pick-list" id="pick-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="chart"><div class="tooltip" id="tip"></div></div>
+    <div class="facts" id="c-facts"></div>
+  </div>
+
+  <div class="card section">
+    <h2>Recent changes</h2>
+    <div class="meta">Price moves and stock flips for the printers in the table, newest first</div>
+    <ul class="list cols2" id="changes"></ul>
+  </div>
+
+  <div class="card section">
+    <div class="hscroll" id="tbl-top" hidden><div id="tbl-top-inner"></div></div>
+    <div class="table-wrap" id="tbl-wrap">
+      <table id="tbl">
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2 section">
+    <div class="card">
+      <h2>New listings</h2>
+      <div class="meta">Printers that appeared on a tracked store in the last 60 days and aren't in the catalog yet</div>
+      <ul class="list" id="new"></ul>
+    </div>
+    <div class="card">
+      <h2>Scrape health</h2>
+      <div class="meta" id="health-sub"></div>
+      <ul class="list" id="health"></ul>
+    </div>
+  </div>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script>
+const DATA = {"generated":"2026-10-15 11:29","latest_run":"2026-10-15","last_scraped_utc":"2026-10-15T13:01:17Z","first_run":"2026-10-14","days":2,"reference":null,"items":[{"id":0,"brand":"Elegoo","model":"Saturn 4 Ultra 16K","tech":"Resin","url":"https://us.elegoo.com/products/saturn-4-ultra-16k-10inch-monochrome-lcd-resin-3d-printer","key":true,"notes":"","price":499.0,"list":649.99,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":499.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",499.0,649.99,"yes"],["2026-10-15",499.0,649.99,"yes"]]},{"id":1,"brand":"Elegoo","model":"Saturn 4 Ultra","tech":"Resin","url":"https://us.elegoo.com/products/saturn-4-ultra-12k-10inch-monochrome-lcd-resin-3d-printer","key":true,"notes":"","price":399.0,"list":593.99,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":399.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",399.0,593.99,"yes"],["2026-10-15",399.0,593.99,"yes"]]},{"id":2,"brand":"Elegoo","model":"Saturn 4","tech":"Resin","url":"https://us.elegoo.com/products/saturn-4-12k-10inch-monochrome-lcd-resin-3d-printer","key":false,"notes":"","price":319.0,"list":399.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":319.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",319.0,399.0,"yes"],["2026-10-15",319.0,399.0,"yes"]]},{"id":3,"brand":"Elegoo","model":"Saturn 3 Ultra","tech":"Resin","url":"https://us.elegoo.com/products/elegoo-saturn-3-ultra-resin-3d-printer-12k","key":false,"notes":"","price":299.0,"list":375.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":299.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",299.0,375.0,"yes"],["2026-10-15",299.0,375.0,"yes"]]},{"id":4,"brand":"Elegoo","model":"Saturn 3","tech":"Resin","url":"https://us.elegoo.com/products/elegoo-saturn-3-resin-3d-printer-12k","key":false,"notes":"","price":259.0,"list":369.99,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":259.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",259.0,369.99,"yes"],["2026-10-15",259.0,369.99,"yes"]]},{"id":5,"brand":"Elegoo","model":"Mars 5 Ultra","tech":"Resin","url":"https://us.elegoo.com/products/mars-5-ultra-9k-7inch-monochrome-lcd-resin-3d-printer","key":true,"notes":"","price":269.0,"list":338.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":269.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",269.0,338.0,"yes"],["2026-10-15",269.0,338.0,"yes"]]},{"id":6,"brand":"Elegoo","model":"Mars 5","tech":"Resin","url":"https://us.elegoo.com/products/mars-5-4k-6-6inch-monochrome-lcd-resin-3d-printer","key":false,"notes":"","price":179.0,"list":225.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":179.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",179.0,225.0,"yes"],["2026-10-15",179.0,225.0,"yes"]]},{"id":7,"brand":"Elegoo","model":"Mars 4 Ultra","tech":"Resin","url":"https://us.elegoo.com/products/elegoo-mars-4-ultra-msla-resin-3d-printer-with-9k-mono-lcd","key":true,"notes":"","price":219.0,"list":299.99,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":219.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",219.0,299.99,"yes"],["2026-10-15",219.0,299.99,"yes"]]},{"id":8,"brand":"Elegoo","model":"Jupiter 2","tech":"Resin","url":"https://us.elegoo.com/products/elegoo-jupiter-2","key":false,"notes":"","price":949.0,"list":1299.99,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":949.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",949.0,1299.99,"yes"],["2026-10-15",949.0,1299.99,"yes"]]},{"id":9,"brand":"Anycubic","model":"Photon Mono M7 Pro","tech":"Resin","url":"https://store.anycubic.com/products/photon-mono-m7-pro","key":true,"notes":"","price":489.0,"list":669.0,"in_stock":"yes","variant":"None / None / Other","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":489.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",489.0,669.0,"yes"],["2026-10-15",489.0,669.0,"yes"]]},{"id":10,"brand":"Anycubic","model":"Photon Mono M7","tech":"Resin","url":"https://store.anycubic.com/products/photon-mono-m7","key":false,"notes":"","price":429.0,"list":519.0,"in_stock":"yes","variant":"None / None / Other","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":429.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",429.0,519.0,"yes"],["2026-10-15",429.0,519.0,"yes"]]},{"id":11,"brand":"Anycubic","model":"Photon Mono M7 Max","tech":"Resin","url":"https://store.anycubic.com/products/photon-mono-m7-max","key":false,"notes":"","price":749.0,"list":899.0,"in_stock":"yes","variant":"None / None / Other","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":749.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",749.0,899.0,"yes"],["2026-10-15",749.0,899.0,"yes"]]},{"id":12,"brand":"Anycubic","model":"Photon Mono 4 Ultra","tech":"Resin","url":"https://store.anycubic.com/products/photon-mono-4-ultra","key":false,"notes":"","price":299.0,"list":299.0,"in_stock":"yes","variant":"None / None / Other","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":299.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",299.0,299.0,"yes"],["2026-10-15",299.0,299.0,"yes"]]},{"id":13,"brand":"Anycubic","model":"Photon P1","tech":"Resin","url":"https://store.anycubic.com/products/photon-p1-resin-3d-printer","key":false,"notes":"","price":599.0,"list":699.0,"in_stock":"yes","variant":"None / None / Other","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":599.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",599.0,699.0,"yes"],["2026-10-15",599.0,699.0,"yes"]]},{"id":14,"brand":"Anycubic","model":"Photon P1 Max","tech":"Resin","url":"https://store.anycubic.com/products/photon-p1-max-best-large-resin-3d-printer","key":false,"notes":"","price":959.0,"list":999.0,"in_stock":"yes","variant":"Single Unit / None / Other","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":959.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",959.0,999.0,"yes"],["2026-10-15",959.0,999.0,"yes"]]},{"id":15,"brand":"Anycubic","model":"Photon Mono 2","tech":"Resin","url":"https://store.anycubic.com/products/photon-mono-2-3d-printer","key":true,"notes":"Listed as End Of Life on the store","price":209.0,"list":209.0,"in_stock":"no","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":209.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",209.0,209.0,"no"],["2026-10-15",209.0,209.0,"no"]]},{"id":16,"brand":"HeyGears","model":"Reflex RS","tech":"Resin","url":"https://store.heygears.com/products/ultracraft-reflex-rs-3d-printer","key":true,"notes":"","price":499.0,"list":999.0,"in_stock":"yes","variant":"Reflex RS / None","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":499.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",499.0,999.0,"yes"],["2026-10-15",499.0,999.0,"yes"]]},{"id":17,"brand":"HeyGears","model":"Reflex RS Turbo","tech":"Resin","url":"https://store.heygears.com/products/ultracraft-reflex-rs-turbo-3d-printer","key":false,"notes":"","price":599.0,"list":999.0,"in_stock":"yes","variant":"Reflex RS Turbo / None","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":599.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",599.0,999.0,"yes"],["2026-10-15",599.0,999.0,"yes"]]},{"id":18,"brand":"HeyGears","model":"Reflex","tech":"Resin","url":"https://store.heygears.com/products/ultracraft-reflex-3d-printer","key":true,"notes":"","price":979.3,"list":1399.0,"in_stock":"yes","variant":"Reflex / None","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":979.3,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",979.3,1399.0,"yes"],["2026-10-15",979.3,1399.0,"yes"]]},{"id":19,"brand":"HeyGears","model":"Reflex Turbo","tech":"Resin","url":"https://store.heygears.com/products/reflex-turbo-3d-printer","key":false,"notes":"","price":1499.0,"list":1499.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1499.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1499.0,1499.0,"yes"],["2026-10-15",1499.0,1499.0,"yes"]]},{"id":20,"brand":"HeyGears","model":"Reflex 2","tech":"Resin","url":"https://store.heygears.com/products/reflex2-3d-printer","key":false,"notes":"","price":1629.0,"list":1799.0,"in_stock":"yes","variant":"Reflex 2 / None / None","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1629.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1629.0,1799.0,"yes"],["2026-10-15",1629.0,1799.0,"yes"]]},{"id":21,"brand":"HeyGears","model":"Reflex 2 Pro","tech":"Resin","url":"https://store.heygears.com/products/reflex-2-pro-3d-printer","key":false,"notes":"","price":2999.0,"list":2999.0,"in_stock":"yes","variant":"Reflex 2 Pro","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":2999.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",2999.0,2999.0,"yes"],["2026-10-15",2999.0,2999.0,"yes"]]},{"id":22,"brand":"Phrozen","model":"Sonic Mini 8K S","tech":"Resin","url":"https://us.phrozen3d.com/products/sonic-mini-8k-s","key":true,"notes":"","price":270.0,"list":270.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":270.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",270.0,270.0,"yes"],["2026-10-15",270.0,270.0,"yes"]]},{"id":23,"brand":"Phrozen","model":"Sonic Mighty 8K","tech":"Resin","url":"https://us.phrozen3d.com/products/sonic-mighty-8k","key":false,"notes":"","price":410.0,"list":410.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":410.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",410.0,410.0,"yes"],["2026-10-15",410.0,410.0,"yes"]]},{"id":24,"brand":"Phrozen","model":"Sonic Mighty 16K","tech":"Resin","url":"https://us.phrozen3d.com/products/sonic-mighty-16k-printer","key":false,"notes":"","price":720.0,"list":720.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":720.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",720.0,720.0,"yes"],["2026-10-15",720.0,720.0,"yes"]]},{"id":25,"brand":"Phrozen","model":"Sonic Mega 8K S","tech":"Resin","url":"https://us.phrozen3d.com/products/sonic-mega-8k-s","key":false,"notes":"","price":1170.0,"list":1170.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1170.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1170.0,1170.0,"yes"],["2026-10-15",1170.0,1170.0,"yes"]]},{"id":26,"brand":"Phrozen","model":"Sonic Mega 8K V2","tech":"Resin","url":"https://us.phrozen3d.com/products/sonic-mega-8k-v2","key":false,"notes":"","price":2800.0,"list":2800.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":2800.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",2800.0,2800.0,"yes"],["2026-10-15",2800.0,2800.0,"yes"]]},{"id":27,"brand":"Phrozen","model":"Sonic XL 4K Plus","tech":"Resin","url":"https://us.phrozen3d.com/products/sonic-xl-4k-plus-lcd-3d-printer","key":false,"notes":"","price":3500.0,"list":3500.0,"in_stock":"yes","variant":"","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":3500.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",3500.0,3500.0,"yes"],["2026-10-15",3500.0,3500.0,"yes"]]},{"id":28,"brand":"UniFormation","model":"GK3 Pro","tech":"Resin","url":"https://uniformation3d.com/products/uniformation-resin-3d-printer-gk3-pro","key":true,"notes":"","price":709.99,"list":899.99,"in_stock":"yes","variant":"GK3 Pro / USA","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":709.99,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",709.99,899.99,"yes"],["2026-10-15",709.99,899.99,"yes"]]},{"id":29,"brand":"UniFormation","model":"GK3","tech":"Resin","url":"https://uniformation3d.com/products/uniformation-resin-3d-printer-gk3","key":false,"notes":"","price":519.99,"list":729.99,"in_stock":"yes","variant":"GK3-T screw / None / USA","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":519.99,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",519.99,729.99,"yes"],["2026-10-15",519.99,729.99,"yes"]]},{"id":30,"brand":"UniFormation","model":"GK3 Ultra","tech":"Resin","url":"https://uniformation3d.com/products/uniformation-resin-3d-printer-gk3-ultra","key":false,"notes":"","price":1099.99,"list":1399.99,"in_stock":"yes","variant":"GK3 Ultra / USA","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1099.99,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1099.99,1399.99,"yes"],["2026-10-15",1099.99,1399.99,"yes"]]},{"id":31,"brand":"Creality","model":"Halot Mage S 14K","tech":"Resin","url":"https://store.creality.com/products/halot-mage-s-14k-resin-3d-printer","key":true,"notes":"","price":399.0,"list":489.0,"in_stock":"yes","variant":"Default Title","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":399.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",399.0,489.0,"yes"],["2026-10-15",399.0,489.0,"yes"]]},{"id":32,"brand":"Creality","model":"Halot X1","tech":"Resin","url":"https://store.creality.com/products/halot-x1-resin-3d-printer","key":false,"notes":"","price":469.0,"list":599.0,"in_stock":"yes","variant":"HALOT-X1","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":469.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",469.0,599.0,"yes"],["2026-10-15",469.0,599.0,"yes"]]},{"id":33,"brand":"Creality","model":"Halot X1 Neo","tech":"Resin","url":"https://store.creality.com/products/halot-x1-neo-resin-3d-printer","key":false,"notes":"","price":239.0,"list":239.0,"in_stock":"yes","variant":"Default Title","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":239.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",239.0,239.0,"yes"],["2026-10-15",239.0,239.0,"yes"]]},{"id":34,"brand":"Bambu Lab","model":"A1","tech":"FDM","url":"https://us.store.bambulab.com/products/a1","key":true,"notes":"","price":299.0,"list":299.0,"in_stock":"yes","variant":"Bambu Lab A1 3D Printer - A1","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":299.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",299.0,299.0,"yes"],["2026-10-15",299.0,299.0,"yes"]]},{"id":35,"brand":"Bambu Lab","model":"A1 Combo","tech":"FDM","url":"https://us.store.bambulab.com/products/a1","key":false,"notes":"","price":399.0,"list":399.0,"in_stock":"yes","variant":"Bambu Lab A1 3D Printer - A1 Combo","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":399.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",399.0,399.0,"yes"],["2026-10-15",399.0,399.0,"yes"]]},{"id":36,"brand":"Bambu Lab","model":"A1 mini","tech":"FDM","url":"https://us.store.bambulab.com/products/a1-mini","key":false,"notes":"","price":219.0,"list":219.0,"in_stock":"yes","variant":"Bambu Lab A1 mini 3D Printer - A1 mini","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":219.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",219.0,219.0,"yes"],["2026-10-15",219.0,219.0,"yes"]]},{"id":37,"brand":"Bambu Lab","model":"A1 mini Combo","tech":"FDM","url":"https://us.store.bambulab.com/products/a1-mini","key":false,"notes":"","price":329.0,"list":329.0,"in_stock":"yes","variant":"Bambu Lab A1 mini 3D Printer - A1 mini Combo","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":329.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",329.0,329.0,"yes"],["2026-10-15",329.0,329.0,"yes"]]},{"id":38,"brand":"Bambu Lab","model":"A2L","tech":"FDM","url":"https://us.store.bambulab.com/products/a2l","key":false,"notes":"","price":469.0,"list":469.0,"in_stock":"yes","variant":"Bambu Lab A2L - A2L","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":469.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",469.0,469.0,"yes"],["2026-10-15",469.0,469.0,"yes"]]},{"id":39,"brand":"Bambu Lab","model":"A2L Combo","tech":"FDM","url":"https://us.store.bambulab.com/products/a2l","key":false,"notes":"","price":569.0,"list":569.0,"in_stock":"yes","variant":"Bambu Lab A2L - A2L Combo","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":569.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",569.0,569.0,"yes"],["2026-10-15",569.0,569.0,"yes"]]},{"id":40,"brand":"Bambu Lab","model":"P1S","tech":"FDM","url":"https://us.store.bambulab.com/products/p1s","key":false,"notes":"","price":399.0,"list":399.0,"in_stock":"yes","variant":"Bambu Lab P1S 3D Printer - P1S","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":399.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",399.0,399.0,"yes"],["2026-10-15",399.0,399.0,"yes"]]},{"id":41,"brand":"Bambu Lab","model":"P1S AMS Combo","tech":"FDM","url":"https://us.store.bambulab.com/products/p1s","key":false,"notes":"","price":549.0,"list":549.0,"in_stock":"yes","variant":"Bambu Lab P1S 3D Printer - P1S AMS Combo","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":549.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",549.0,549.0,"yes"],["2026-10-15",549.0,549.0,"yes"]]},{"id":42,"brand":"Bambu Lab","model":"P2S","tech":"FDM","url":"https://us.store.bambulab.com/products/p2s","key":false,"notes":"","price":549.0,"list":549.0,"in_stock":"yes","variant":"Bambu Lab P2S - P2S","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":549.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",549.0,549.0,"yes"],["2026-10-15",549.0,549.0,"yes"]]},{"id":43,"brand":"Bambu Lab","model":"P2S Combo","tech":"FDM","url":"https://us.store.bambulab.com/products/p2s","key":false,"notes":"","price":749.0,"list":749.0,"in_stock":"yes","variant":"Bambu Lab P2S - P2S Combo","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":749.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",749.0,749.0,"yes"],["2026-10-15",749.0,749.0,"yes"]]},{"id":44,"brand":"Bambu Lab","model":"X2D","tech":"FDM","url":"https://us.store.bambulab.com/products/x2d","key":false,"notes":"","price":649.0,"list":649.0,"in_stock":"yes","variant":"Bambu Lab X2D - X2D","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":649.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",649.0,649.0,"yes"],["2026-10-15",649.0,649.0,"yes"]]},{"id":45,"brand":"Bambu Lab","model":"X2D AMS Combo","tech":"FDM","url":"https://us.store.bambulab.com/products/x2d","key":false,"notes":"","price":899.0,"list":899.0,"in_stock":"yes","variant":"Bambu Lab X2D - X2D AMS Combo","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":899.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",899.0,899.0,"yes"],["2026-10-15",899.0,899.0,"yes"]]},{"id":46,"brand":"Bambu Lab","model":"H2S","tech":"FDM","url":"https://us.store.bambulab.com/products/h2s","key":false,"notes":"","price":1199.0,"list":1249.0,"in_stock":"yes","variant":"Bambu Lab H2S - H2S","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1199.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1199.0,1249.0,"yes"],["2026-10-15",1199.0,1249.0,"yes"]]},{"id":47,"brand":"Bambu Lab","model":"H2S AMS Combo","tech":"FDM","url":"https://us.store.bambulab.com/products/h2s","key":false,"notes":"","price":1399.0,"list":1499.0,"in_stock":"yes","variant":"Bambu Lab H2S - H2S AMS Combo","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1399.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1399.0,1499.0,"yes"],["2026-10-15",1399.0,1499.0,"yes"]]},{"id":48,"brand":"Bambu Lab","model":"H2D","tech":"FDM","url":"https://us.store.bambulab.com/products/h2d","key":false,"notes":"","price":1549.0,"list":1749.0,"in_stock":"yes","variant":"Bambu Lab H2D - H2D / standard","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1549.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1549.0,1749.0,"yes"],["2026-10-15",1549.0,1749.0,"yes"]]},{"id":49,"brand":"Bambu Lab","model":"H2D AMS Combo","tech":"FDM","url":"https://us.store.bambulab.com/products/h2d","key":false,"notes":"","price":1749.0,"list":1999.0,"in_stock":"yes","variant":"Bambu Lab H2D - H2D AMS Combo / Standard","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1749.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1749.0,1999.0,"yes"],["2026-10-15",1749.0,1999.0,"yes"]]},{"id":50,"brand":"Bambu Lab","model":"H2C AMS Combo","tech":"FDM","url":"https://us.store.bambulab.com/products/h2c","key":false,"notes":"","price":2199.0,"list":2199.0,"in_stock":"yes","variant":"Bambu Lab H2C - H2C AMS Combo / Standard","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":2199.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",2199.0,2199.0,"yes"],["2026-10-15",2199.0,2199.0,"yes"]]},{"id":51,"brand":"Prusa","model":"SL1S Speed","tech":"Resin","url":"https://www.prusa3d.com/product/original-prusa-sl1s-speed-3d-printer/","key":true,"notes":"","price":2159.0,"list":2159.0,"in_stock":"yes","variant":"Original Prusa SL1S SPEED 3D printer","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":2159.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",2159.0,2159.0,"no"],["2026-10-15",2159.0,2159.0,"yes"]]},{"id":52,"brand":"Prusa","model":"CORE One+ (assembled)","tech":"FDM","url":"https://www.prusa3d.com/product/prusa-core-one/","key":false,"notes":"","price":1299.0,"list":1299.0,"in_stock":"yes","variant":"Prusa CORE One+ (Gen 2)","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1299.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1299.0,1299.0,"yes"],["2026-10-15",1299.0,1299.0,"yes"]]},{"id":53,"brand":"Prusa","model":"CORE One+ (kit)","tech":"FDM","url":"https://www.prusa3d.com/product/prusa-core-one-kit/","key":false,"notes":"","price":999.0,"list":999.0,"in_stock":"yes","variant":"Prusa CORE One+ (Gen 2) Assembly kit","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":999.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",999.0,999.0,"yes"],["2026-10-15",999.0,999.0,"yes"]]},{"id":54,"brand":"Prusa","model":"CORE One L+","tech":"FDM","url":"https://www.prusa3d.com/product/prusa-core-one-l-2/","key":false,"notes":"","price":1999.0,"list":1999.0,"in_stock":"yes","variant":"Prusa CORE One L+","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":1999.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",1999.0,1999.0,"yes"],["2026-10-15",1999.0,1999.0,"yes"]]},{"id":55,"brand":"Prusa","model":"MK4S (assembled)","tech":"FDM","url":"https://www.prusa3d.com/product/original-prusa-mk4s-3d-printer/","key":false,"notes":"","price":999.0,"list":999.0,"in_stock":"yes","variant":"Original Prusa MK4S 3D Printer","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":999.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",999.0,999.0,"yes"],["2026-10-15",999.0,999.0,"yes"]]},{"id":56,"brand":"Prusa","model":"MK4S (kit)","tech":"FDM","url":"https://www.prusa3d.com/product/original-prusa-mk4s-3d-printer-kit/","key":false,"notes":"","price":709.0,"list":709.0,"in_stock":"yes","variant":"Original Prusa MK4S 3D Printer kit","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":709.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",709.0,709.0,"yes"],["2026-10-15",709.0,709.0,"yes"]]},{"id":57,"brand":"Prusa","model":"XL+ Single-Tool","tech":"FDM","url":"https://www.prusa3d.com/product/original-prusa-xl-single-toolhead-3d-printer/","key":false,"notes":"","price":2299.0,"list":2299.0,"in_stock":"yes","variant":"Prusa XL+ Single-Tool","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":2299.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",2299.0,2299.0,"yes"],["2026-10-15",2299.0,2299.0,"yes"]]},{"id":58,"brand":"Prusa","model":"MINI+ (semi-assembled, enclosure bundle)","tech":"FDM","url":"https://www.prusa3d.com/product/original-prusa-mini-semi-assembled-3d-printer-enclosure-bundle-5/","key":false,"notes":"","price":549.0,"list":549.0,"in_stock":"yes","variant":"Original Prusa MINI+ Semi-assembled 3D Printer - Enclosure Bundle","as_of":"2026-10-15","stale":false,"d7":null,"d30":null,"first_price":549.0,"first_date":"2026-10-14","last_change":null,"series":[["2026-10-14",549.0,549.0,"yes"],["2026-10-15",549.0,549.0,"yes"]]}],"changes":[{"date":"2026-10-15","brand":"Prusa","model":"SL1S Speed","kind":"stock","from":"no","to":"yes"}],"new_listings":[],"errors":[]};
+const $ = (id) => document.getElementById(id);
+const usd = (v, dp) => v == null ? "—" : "$" + v.toLocaleString("en-US", {minimumFractionDigits: dp ?? (v % 1 ? 2 : 0), maximumFractionDigits: 2});
+const signed = (v) => v == null ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "±") + usd(Math.abs(v));
+const fmtDate = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month: "short", day: "numeric"});
+const fmtDateY = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric"});
+const el = (tag, opts = {}, kids = []) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(opts)) {
+    if (k === "text") n.textContent = v;
+    else if (k === "class") n.className = v;
+    else n.setAttribute(k, v);
+  }
+  for (const c of [].concat(kids)) if (c != null) n.append(c);
+  return n;
+};
+const SVGNS = "http://www.w3.org/2000/svg";
+const svg = (tag, attrs = {}) => {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+};
+const discount = (it) => it.list && it.price && it.list > it.price ? Math.round(100 * (1 - it.price / it.list)) : 0;
+
+function statusIcon(ok) {
+  const s = svg("svg", {width: 12, height: 12, viewBox: "0 0 12 12", "aria-hidden": "true"});
+  if (ok) {
+    s.append(svg("circle", {cx: 6, cy: 6, r: 5, fill: "var(--good)"}));
+    s.append(svg("path", {d: "M3.5 6.2l1.7 1.7 3.3-3.6", stroke: "#fff", "stroke-width": 1.6, fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round"}));
+  } else {
+    s.append(svg("circle", {cx: 6, cy: 6, r: 5, fill: "var(--critical)"}));
+    s.append(svg("path", {d: "M4 4l4 4M8 4l-4 4", stroke: "#fff", "stroke-width": 1.6, "stroke-linecap": "round"}));
+  }
+  return s;
+}
+function stockCell(v) {
+  if (v === "yes") return el("span", {class: "status"}, [statusIcon(true), el("span", {text: "In stock"})]);
+  if (v === "no") return el("span", {class: "status"}, [statusIcon(false), el("span", {text: "Out of stock"})]);
+  return el("span", {class: "muted", text: "—"});
+}
+
+// ---------------------------------------------------------------- header + KPIs
+const items = DATA.items;
+const ref = DATA.reference;
+const priced = items.filter((i) => i.price != null);
+const since7 = new Date(DATA.latest_run + "T12:00:00"); since7.setDate(since7.getDate() - 7);
+const cut7 = since7.toISOString().slice(0, 10);
+const recentMoves = DATA.changes.filter((c) => c.kind === "price" && c.date > cut7).length;
+const onSale = priced.filter((i) => discount(i) > 0).length;
+const resin = priced.filter((i) => i.tech === "Resin").length;
+const under = ref ? priced.filter((i) => i.tech === "Resin" && i.price < ref.price).length : 0;
+const cheapest = priced.filter((i) => i.tech === "Resin").sort((a, b) => a.price - b.price)[0];
+
+const fmtStamp = (iso) => new Date(iso).toLocaleString("en-US",
+  {month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short"});
+$("meta").textContent = `Last scraped ${DATA.last_scraped_utc ? fmtStamp(DATA.last_scraped_utc) : "—"} · ` +
+  `${DATA.days} day${DATA.days === 1 ? "" : "s"} of history since ${fmtDateY(DATA.first_run)}`;
+const kpis = [
+  ["Printers tracked", String(items.length), `${new Set(items.map((i) => i.brand)).size} brands, ${resin} resin`],
+  ["Price moves, last 7 days", String(recentMoves), DATA.days < 2 ? "Needs a second day of data" : "Across all tracked printers"],
+  ["On sale today", String(onSale), `${Math.round(100 * onSale / Math.max(priced.length, 1))}% show a struck-through price`],
+  ref ? [`Resin printers under ${usd(ref.price)}`, `${under} of ${resin}`, `Priced below ${ref.name}`]
+      : ["Cheapest resin printer", cheapest ? usd(cheapest.price) : "—", cheapest ? `${cheapest.brand} ${cheapest.model}` : ""],
+  ["Scrape errors", String(DATA.errors.length), DATA.errors.length ? "See scrape health below" : "Every store read cleanly"],
+];
+for (const [label, value, note] of kpis) {
+  $("kpis").append(el("div", {class: "card kpi"}, [el("div", {class: "label", text: label}), el("div", {class: "value", text: value}), el("div", {class: "note", text: note})]));
+}
+
+// ---------------------------------------------------------------- filters
+for (const b of [...new Set(items.map((i) => i.brand))].sort()) $("f-brand").append(el("option", {text: b}));
+// The chart shows an explicit set of printers (state.chart, item ids). Changing any filter loads exactly
+// the printers the table then shows; the "Choose models" picker and the table checkboxes fine-tune from
+// there. pin = printer whose line stays highlighted (legend or chart click).
+const MAX_SERIES = 64;  // 8 validated hues x 8 marker styles; more than the whole catalog today
+const state = {sort: "brand", dir: 1, chart: [], slots: new Map(), pin: null};
+const inChart = (id) => state.slots.has(id);
+function addToChart(id) {
+  if (inChart(id) || state.chart.length >= MAX_SERIES) return false;
+  // lowest free slot: a model keeps its color for as long as it stays selected
+  let slot = 0;
+  const used = new Set(state.slots.values());
+  while (used.has(slot)) slot++;
+  state.slots.set(id, slot);
+  state.chart.push(id);
+  return true;
+}
+function removeFromChart(id) {
+  state.slots.delete(id);
+  state.chart = state.chart.filter((x) => x !== id);
+  if (state.pin === id) state.pin = null;
+}
+// Replace the chart set. Printers that stay keep their color (no repaint on filter); newcomers take
+// the lowest free slots. If keeping colors would use more marker styles than the set needs (e.g. going
+// from all 59 to 13 printers), re-deal so up to 8 lines get 8 plain hues, up to 16 two styles, etc.
+function setChart(ids) {
+  const want = new Set(ids);
+  for (const id of [...state.chart]) if (!want.has(id)) removeFromChart(id);
+  for (const id of [...want].sort((a, b) => a - b)) addToChart(id);
+  const maxSlot = Math.max(-1, ...state.slots.values());
+  if (maxSlot >= 8 * Math.ceil(state.chart.length / 8)) {
+    const ids2 = [...state.chart].sort((a, b) => a - b);
+    state.chart = []; state.slots = new Map();
+    ids2.forEach(addToChart);
+  }
+}
+const keyIds = () => items.filter((i) => i.key).map((i) => i.id);
+const STORE_KEY = "competitor-price-tracker.chart";
+function saveChart() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state.chart.map((id) => items[id].brand + "|" + items[id].model))); } catch (e) {}
+}
+function loadChart() {
+  try {
+    const keys = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (!Array.isArray(keys)) return false;
+    const byKey = new Map(items.map((i) => [i.brand + "|" + i.model, i.id]));
+    const ids = keys.map((k) => byKey.get(k)).filter((id) => id != null);
+    state.chart = []; state.slots = new Map();
+    for (const id of ids) addToChart(id);
+    return true;
+  } catch (e) { return false; }
+}
+function filtered() {
+  const b = $("f-brand").value, t = $("f-tech").value;
+  return items.filter((i) =>
+    (!b || i.brand === b) && (!t || i.tech === t) &&
+    (!$("f-key").checked || i.key) &&
+    (!$("f-sale").checked || discount(i) > 0));
+}
+// Filters scope everything below them: the table, the recent changes, and the graph.
+for (const id of ["f-brand", "f-tech", "f-key", "f-sale"]) {
+  $(id).addEventListener("input", () => {
+    const rows = filtered();
+    setChart(rows.map((i) => i.id));
+    if (rows.length > MAX_SERIES) flashCount();
+    renderAll();
+  });
+}
+
+// ---------------------------------------------------------------- table
+const COLS = [
+  {key: "brand", label: "Brand", get: (i) => i.brand},
+  {key: "model", label: "Model", get: (i) => i.model},
+  {key: "tech", label: "Tech", get: (i) => i.tech},
+  {key: "price", label: "Price", num: true, get: (i) => i.price},
+  {key: "list", label: "List", num: true, get: (i) => i.list},
+  {key: "off", label: "Off", num: true, get: (i) => discount(i)},
+  {key: "stock", label: "Stock", get: (i) => i.in_stock},
+  {key: "trend", label: "Trend", sortable: false},
+  {key: "d7", label: "7-day", num: true, get: (i) => i.d7},
+  {key: "d30", label: "30-day", num: true, get: (i) => i.d30},
+];
+if (ref) COLS.push({key: "ref", label: `vs ${ref.short}`, title: `Difference from ${ref.name} at ${usd(ref.price)}`, num: true,
+  get: (i) => i.price != null ? i.price - ref.price : null});
+function renderHead(rows) {
+  const tr = $("thead"); tr.replaceChildren();
+  // header checkbox: chart every printer currently in the table (or remove them all)
+  const shown = rows.filter((i) => inChart(i.id)).length;
+  const all = el("input", {type: "checkbox", "aria-label": "Chart all printers in the table", title: "Chart all printers in the table"});
+  all.checked = rows.length > 0 && shown === rows.length;
+  all.indeterminate = shown > 0 && shown < rows.length;
+  all.addEventListener("change", () => toggleGroup(rows));
+  tr.append(el("th", {class: "pick", scope: "col"}, [all]));
+  for (const c of COLS) {
+    const th = el("th", {class: (c.num ? "num " : "") + (c.sortable === false ? "" : "sortable"), scope: "col"});
+    if (c.title) th.title = c.title;
+    th.append(document.createTextNode(c.label));
+    if (state.sort === c.key) th.append(el("span", {class: "arrow", text: state.dir > 0 ? "▲" : "▼"}));
+    if (c.sortable !== false) th.addEventListener("click", () => {
+      state.dir = state.sort === c.key ? -state.dir : (c.num ? -1 : 1);
+      state.sort = c.key; renderAll();
+    });
+    tr.append(th);
+  }
+}
+function sparkline(series) {
+  const w = 64, h = 22, pad = 3;
+  const s = svg("svg", {width: w, height: h, viewBox: `0 0 ${w} ${h}`, "aria-hidden": "true"});
+  const pts = series.slice(-30);
+  if (!pts.length) return s;
+  const ys = pts.map((p) => p[1]);
+  const lo = Math.min(...ys), hi = Math.max(...ys);
+  const x = (k) => pts.length === 1 ? w - pad - 2 : pad + (k / (pts.length - 1)) * (w - 2 * pad - 2);
+  const y = (v) => hi === lo ? h / 2 : h - pad - ((v - lo) / (hi - lo)) * (h - 2 * pad);
+  if (pts.length > 1) {
+    let d = `M${x(0)},${y(ys[0])}`;
+    for (let k = 1; k < pts.length; k++) d += `H${x(k)}V${y(ys[k])}`;
+    s.append(svg("path", {d, fill: "none", stroke: "var(--axis)", "stroke-width": 1.5, "stroke-linejoin": "round"}));
+  }
+  s.append(svg("circle", {cx: x(pts.length - 1), cy: y(ys[ys.length - 1]), r: 2.5, fill: "var(--accent)"}));
+  return s;
+}
+function sortRows(rows) {
+  const col = COLS.find((c) => c.key === state.sort);
+  return rows.sort((a, b) => {
+    const va = col.get(a), vb = col.get(b);
+    if (va == null && vb == null) return a.id - b.id;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    const cmp = typeof va === "number" ? va - vb : String(va).localeCompare(String(vb));
+    return state.dir * cmp || a.id - b.id;
+  });
+}
+function renderTable(rows) {
+  const tb = $("tbody"); tb.replaceChildren();
+  for (const i of rows) {
+    const charted = inChart(i.id);
+    const tr = el("tr");
+    if (charted) tr.className = "selected";
+    const box = el("input", {type: "checkbox", "aria-label": `Chart ${i.brand} ${i.model}`});
+    box.checked = charted;
+    box.addEventListener("change", () => toggleChart(i.id));
+    const keyslot = el("span", {class: "keyslot"});
+    if (charted) keyslot.append(seriesKey(i));
+    const pickCell = el("td", {class: "pick"}, [el("label", {}, [box, keyslot])]);
+    const model = el("td", {class: "model"}, [el("a", {href: i.url, target: "_blank", rel: "noopener", text: i.model})]);
+    if (i.stale) model.append(el("span", {class: "tag", text: "stale", title: `Last read ${i.as_of}`}));
+    const d = discount(i);
+    const refCol = COLS.find((c) => c.key === "ref");
+    tr.append(
+      pickCell, el("td", {class: "ink2", text: i.brand}), model, el("td", {class: "ink2", text: i.tech}),
+      el("td", {class: "num", text: usd(i.price)}),
+      el("td", {class: "num " + (d ? "ink2" : "muted"), text: d ? usd(i.list) : "—"}),
+      el("td", {class: "num", text: d ? d + "%" : ""}),
+      el("td", {class: "nowrap"}, [stockCell(i.in_stock)]),
+      el("td", {class: "nowrap"}, [sparkline(i.series)]),
+      el("td", {class: "num " + (i.d7 ? "" : "muted"), text: i.d7 == null ? "—" : i.d7 ? signed(i.d7) : "0"}),
+      el("td", {class: "num " + (i.d30 ? "" : "muted"), text: i.d30 == null ? "—" : i.d30 ? signed(i.d30) : "0"}),
+      refCol ? el("td", {class: "num ink2", text: signed(refCol.get(i))}) : null,
+    );
+    // clicking anywhere on the row (except the store link or the checkbox itself) toggles it in the chart
+    tr.addEventListener("click", (e) => { if (!e.target.closest("a, td.pick")) toggleChart(i.id); });
+    tb.append(tr);
+  }
+  if (!rows.length) tb.append(el("tr", {}, [el("td", {colspan: COLS.length + 1, class: "empty", text: "No printers match these filters."})]));
+}
+// "Select all" checkboxes (table header, brand rows in the picker): select the whole group, or clear it
+// when it's already fully selected. If the chart is full, a partly selected group clears instead, so a
+// partial state can never get stuck.
+function toggleGroup(group) {
+  const on = group.filter((i) => inChart(i.id)).length;
+  if (on === group.length || (on > 0 && state.chart.length >= MAX_SERIES)) group.forEach((i) => removeFromChart(i.id));
+  else if (![...group].sort((a, b) => a.id - b.id).every((i) => inChart(i.id) || addToChart(i.id))) flashCount();
+  renderAll();
+}
+function syncTopScroll() {
+  const wrap = $("tbl-wrap"), top = $("tbl-top");
+  $("tbl-top-inner").style.width = wrap.scrollWidth + "px";
+  top.hidden = wrap.scrollWidth <= wrap.clientWidth + 1;
+  top.scrollLeft = wrap.scrollLeft;
+}
+$("tbl-top").addEventListener("scroll", () => { const w = $("tbl-wrap"), t = $("tbl-top"); if (w.scrollLeft !== t.scrollLeft) w.scrollLeft = t.scrollLeft; });
+$("tbl-wrap").addEventListener("scroll", () => { const w = $("tbl-wrap"), t = $("tbl-top"); if (t.scrollLeft !== w.scrollLeft) t.scrollLeft = w.scrollLeft; });
+// re-measure whenever the table or its container changes size (window resize, sidebar, zoom)
+if (window.ResizeObserver) { const ro = new ResizeObserver(() => syncTopScroll()); ro.observe($("tbl-wrap")); ro.observe($("tbl")); }
+function toggleChart(id) {
+  if (inChart(id)) removeFromChart(id);
+  else if (!addToChart(id)) flashCount();
+  renderAll();
+}
+function flashCount() {
+  const msg = `Max ${MAX_SERIES} models at once`;
+  $("pick-count").textContent = msg;
+  $("pick-label").textContent = msg;
+  clearTimeout(flashCount.t);
+  flashCount.t = setTimeout(renderPickerCount, 2200);
+}
+
+// ---------------------------------------------------------------- chart
+function niceTicks(lo, hi, n) {
+  const span = hi - lo || Math.abs(hi) || 1;
+  const step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= n) || 10 * mag;
+  const out = [];
+  for (let v = Math.floor(lo / step) * step; v <= hi + 1e-9; v += step) out.push(Math.round(v * 100) / 100);
+  return out;
+}
+const DAY = 864e5;
+const ts = (d) => new Date(d + "T12:00:00").getTime();
+function timeDomain(times) {
+  let t0 = Math.min(...times), t1 = Math.max(...times);
+  if (t1 - t0 < 6 * DAY) { const mid = (t0 + t1) / 2; t0 = mid - 3.5 * DAY; t1 = mid + 3.5 * DAY; }
+  return [t0, t1];
+}
+function valueDomain(vals) {
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const padv = (hi - lo) * 0.12 || hi * 0.1;
+  lo = Math.max(0, lo - padv); hi = hi + padv;
+  const ticks = niceTicks(lo, hi, 4);
+  return {lo: Math.min(lo, ticks[0]), hi: Math.max(hi, ticks[ticks.length - 1]), ticks};
+}
+function drawAxes(s, {W, H, m, t0, t1, ticks, x, y}) {
+  for (const tv of ticks) {
+    s.append(svg("line", {x1: m.l, x2: W - m.r, y1: y(tv), y2: y(tv), stroke: tv === ticks[0] ? "var(--baseline)" : "var(--grid)", "stroke-width": 1}));
+    const lab = svg("text", {x: m.l - 8, y: y(tv) + 4, "text-anchor": "end", fill: "var(--axis)", "font-size": 11});
+    lab.textContent = "$" + tv.toLocaleString("en-US");
+    s.append(lab);
+  }
+  const nX = Math.max(2, Math.min(6, Math.floor((W - m.l - m.r) / 90)));
+  for (let k = 0; k <= nX; k++) {
+    const t = t0 + (k / nX) * (t1 - t0);
+    const lab = svg("text", {x: x(t), y: H - 6, "text-anchor": "middle", fill: "var(--axis)", "font-size": 11});
+    lab.textContent = new Date(t).toLocaleDateString("en-US", {month: "short", day: "numeric"});
+    s.append(lab);
+  }
+}
+const stepPath = (pts, x, y, key = "p") => {
+  const ps = pts.filter((p) => p[key] != null);
+  if (!ps.length) return "";
+  let d = `M${x(ps[0].t)},${y(ps[0][key])}`;
+  for (const p of ps.slice(1)) d += `H${x(p.t)}V${y(p[key])}`;
+  return d;
+};
+
+// 8 validated hues in fixed order; series past the 8th reuse a hue with a different end marker
+// (hue x shape x filled/hollow = 64 identities), never a generated 9th color.
+const SHAPES = ["circle", "square", "triangle", "diamond", "circle-o", "square-o", "triangle-o", "diamond-o"];
+const slotOf = (i) => state.slots.get(i.id) ?? 0;
+const hue = (i) => `var(--s${(slotOf(i) % 8) + 1})`;
+const shapeOf = (i) => SHAPES[Math.floor(slotOf(i) / 8) % SHAPES.length];
+function marker(shape, cx, cy, color, r = 4.5) {
+  const hollow = shape.endsWith("-o");
+  const a = hollow ? {fill: "var(--surface)", stroke: color, "stroke-width": 2} : {fill: color, stroke: "var(--surface)", "stroke-width": 2};
+  if (hollow) r -= 0.75;
+  const kind = shape.replace("-o", "");
+  if (kind === "square") return svg("rect", {...a, x: cx - r, y: cy - r, width: 2 * r, height: 2 * r, rx: 1});
+  if (kind === "triangle") return svg("path", {...a, "stroke-linejoin": "round",
+    d: `M${cx},${cy - r * 1.25}L${cx + r * 1.2},${cy + r * 0.9}L${cx - r * 1.2},${cy + r * 0.9}Z`});
+  if (kind === "diamond") return svg("path", {...a, "stroke-linejoin": "round",
+    d: `M${cx},${cy - r * 1.35}L${cx + r * 1.35},${cy}L${cx},${cy + r * 1.35}L${cx - r * 1.35},${cy}Z`});
+  return svg("circle", {...a, cx, cy, r});
+}
+function seriesKey(i) {
+  const k = svg("svg", {width: 22, height: 12, viewBox: "0 0 22 12", "aria-hidden": "true"});
+  k.append(svg("line", {x1: 1, x2: 21, y1: 6, y2: 6, stroke: hue(i), "stroke-width": 2, "stroke-linecap": "round"}));
+  k.append(marker(shapeOf(i), 11, 6, hue(i), 3.5));
+  return k;
+}
+function clearChart() {
+  $("chart").querySelectorAll(":scope > svg").forEach((n) => n.remove());
+  const tip = $("tip");
+  tip.style.display = "none";
+  tip.classList.remove("multi");
+  tip.style.columnCount = "";
+  tip.style.width = "";
+}
+
+// legend and hover readout list printers by brand, then in catalog order within the brand
+const byBrand = (a, b) => a.brand.localeCompare(b.brand) || a.id - b.id;
+function renderMultiChart(chosen) {
+  const box = $("chart"), tip = $("tip");
+  clearChart();
+  const series = chosen.filter((i) => i.series.length).sort(byBrand);
+  const brands = [...new Set(chosen.map((i) => i.brand))];
+  const name = (i) => brands.length === 1 ? i.model : `${i.brand} ${i.model}`;
+  $("c-title").textContent = brands.length === 1 ? `${brands[0]} models` : "Price history";
+  $("c-sub").textContent = chosen.length
+    ? `${chosen.length} printer${chosen.length === 1 ? "" : "s"} · shopper price · hover a line to isolate it, click to pin`
+    : "No printers selected";
+  $("c-legend").style.display = "none";
+  const legend = $("c-facts");
+  legend.replaceChildren();
+  legend.className = "mlegend";
+  if (!series.length) {
+    legend.append(el("div", {class: "empty", text: chosen.length
+      ? "No price history yet for the selected printers."
+      : filtered().length ? "Pick printers with “Choose models” or the table checkboxes." : "No printers match these filters."}));
+    return;
+  }
+
+  const W = Math.max(box.clientWidth, 280), H = series.length > 24 ? 440 : series.length > 8 ? 360 : 300;
+  const pts = new Map(series.map((i) => [i.id, i.series.map(([d, p]) => ({d, t: ts(d), p}))]));
+  const flat = [...pts.values()].flat();
+  const dateOf = new Map(flat.map((p) => [p.t, p.d]));
+  const [t0, t1] = timeDomain(flat.map((p) => p.t));
+  const {lo, hi, ticks} = valueDomain(flat.map((p) => p.p));
+  const m = {t: 12, r: 24, b: 26, l: 56};
+  const y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+  // Direct end-labels only for <= 4 series, and only if they don't collide; the legend always carries identity.
+  const ends = series.map((i) => { const ps = pts.get(i.id); return {i, last: ps[ps.length - 1]}; })
+    .sort((a, b) => y(a.last.p) - y(b.last.p));
+  const direct = series.length <= 4 && ends.every((e, k) => k === 0 || y(e.last.p) - y(ends[k - 1].last.p) >= 14);
+  if (direct) m.r = 200;
+  const x = (t) => m.l + (t - t0) / (t1 - t0) * (W - m.l - m.r);
+
+  const s = svg("svg", {viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": `Price history for ${series.length} printers`});
+  drawAxes(s, {W, H, m, t0, t1, ticks, x, y});
+  const layers = new Map();
+  for (const i of series) {
+    const ps = pts.get(i.id), last = ps[ps.length - 1];
+    const g = svg("g");
+    if (ps.length > 1) g.append(svg("path", {d: stepPath(ps, x, y), fill: "none", stroke: hue(i), "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round", class: "ln"}));
+    g.append(marker(shapeOf(i), x(last.t), y(last.p), hue(i)));
+    if (direct) {
+      const lab = svg("text", {x: x(last.t) + 10, y: y(last.p) + 4, fill: "var(--ink)", "font-size": 12});
+      const nm = name(i);
+      lab.textContent = `${nm.length > 24 ? nm.slice(0, 23) + "…" : nm} ${usd(last.p)}`;
+      g.append(lab);
+    }
+    s.append(g);
+    layers.set(i.id, g);
+  }
+  const cross = svg("line", {y1: m.t, y2: H - m.b, stroke: "var(--baseline)", "stroke-width": 1, visibility: "hidden"});
+  const hit = svg("rect", {x: m.l, y: 0, width: Math.max(W - m.l - m.r, 1), height: H, fill: "transparent", tabindex: "0", style: "cursor: pointer"});
+  s.append(cross, hit);
+
+  let hover = null;
+  const apply = () => {
+    const on = hover ?? state.pin;
+    for (const [id, g] of layers) {
+      g.setAttribute("opacity", on == null || on === id ? 1 : 0.15);
+      const ln = g.querySelector(".ln");
+      if (ln) ln.setAttribute("stroke-width", on === id ? 2.75 : 2);
+    }
+    if (on != null && layers.has(on)) s.insertBefore(layers.get(on), cross);
+    for (const b of legend.querySelectorAll("button")) {
+      b.classList.toggle("on", Number(b.dataset.id) === on);
+      b.setAttribute("aria-pressed", String(Number(b.dataset.id) === state.pin));
+    }
+  };
+  const dates = [...dateOf.keys()].sort((a, b) => a - b);
+  const valueAt = (ps, t) => { let v = null; for (const p of ps) { if (p.t <= t) v = p.p; else break; } return v; };
+  const show = (t, py) => {
+    cross.setAttribute("x1", x(t)); cross.setAttribute("x2", x(t)); cross.setAttribute("visibility", "visible");
+    const at = series.map((i) => ({i, v: valueAt(pts.get(i.id), t)})).filter((r) => r.v != null).sort((a, b) => byBrand(a.i, b.i));
+    if (py != null && at.length) hover = at.reduce((a, b) => Math.abs(y(b.v) - py) < Math.abs(y(a.v) - py) ? b : a).i.id;
+    apply();
+    const on = hover ?? state.pin;
+    tip.replaceChildren(el("div", {class: "t-date", text: fmtDateY(dateOf.get(t))}),
+      ...at.map((r) => el("div", {class: "t-row" + (r.i.id === on ? " hi" : "")},
+        [seriesKey(r.i), el("b", {text: usd(r.v, 2)}), el("span", {class: "nm ink2", text: name(r.i)})])));
+    // long readouts flow into columns so the tooltip stays within the chart's height
+    const COL_W = 250;
+    const cols = Math.max(1, Math.min(Math.ceil(at.length / 16), Math.floor((box.clientWidth - 24) / COL_W)));
+    tip.classList.toggle("multi", cols > 1);
+    tip.style.columnCount = cols > 1 ? cols : "";
+    tip.style.width = cols > 1 ? `${cols * COL_W}px` : "";
+    tip.style.display = "block";
+    const px = x(t) / W * box.clientWidth;
+    const right = px + 14 + tip.offsetWidth <= box.clientWidth;
+    const left = right ? px + 14 : px - 14 - tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(left, box.clientWidth - tip.offsetWidth)) + "px";
+    tip.style.top = "4px";
+  };
+  const toSvg = (e) => {
+    const r = s.getBoundingClientRect();
+    return {sx: (e.clientX - r.left) / r.width * W, sy: (e.clientY - r.top) / r.height * H};
+  };
+  const nearestT = (sx) => {
+    const t = t0 + (sx - m.l) / (W - m.l - m.r) * (t1 - t0);
+    return dates.reduce((a, b) => Math.abs(b - t) < Math.abs(a - t) ? b : a);
+  };
+  hit.addEventListener("pointermove", (e) => { const {sx, sy} = toSvg(e); show(nearestT(sx), sy); });
+  hit.addEventListener("pointerleave", () => { hover = null; tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); apply(); });
+  hit.addEventListener("click", () => { if (hover != null) { state.pin = state.pin === hover ? null : hover; apply(); } });
+  hit.addEventListener("focus", () => show(dates[dates.length - 1], null));
+  hit.addEventListener("blur", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); });
+  box.append(s);
+
+  for (const i of series) {
+    const b = el("button", {type: "button", title: `${i.brand} ${i.model}: ${usd(i.price)}`},
+      [seriesKey(i), el("span", {class: "nm", text: name(i)}), el("span", {class: "pr", text: usd(i.price)})]);
+    b.dataset.id = i.id;
+    b.addEventListener("pointerenter", () => { hover = i.id; apply(); });
+    b.addEventListener("pointerleave", () => { hover = null; apply(); });
+    b.addEventListener("focus", () => { hover = i.id; apply(); });
+    b.addEventListener("blur", () => { hover = null; apply(); });
+    b.addEventListener("click", () => { state.pin = state.pin === i.id ? null : i.id; apply(); });
+    legend.append(b);
+  }
+  apply();
+}
+
+function renderChart(item) {
+  const box = $("chart"), tip = $("tip");
+  clearChart();
+  $("c-title").textContent = `${item.brand} ${item.model}`;
+  $("c-sub").textContent = (item.variant ? `Variant: ${item.variant}` : "Base printer") + (item.notes ? ` · ${item.notes}` : "");
+  const col = hue(item);
+  $("c-price-key").style.borderTopColor = col;
+  $("c-legend").style.display = "";
+  $("c-facts").replaceChildren();
+  $("c-facts").className = "facts";
+  if (!item.series.length) { $("c-facts").append(el("div", {class: "empty", text: "No price history yet."})); return; }
+
+  const W = Math.max(box.clientWidth, 280), H = 300;
+  const m = {t: 12, r: 64, b: 26, l: 52};
+  const ser = item.series.map(([d, p, l, s]) => ({d, t: ts(d), p, l, s}));
+  const [t0, t1] = timeDomain(ser.map((p) => p.t));
+  const vals = ser.flatMap((p) => [p.p, p.l]).filter((v) => v != null);
+  const {lo, hi, ticks} = valueDomain(vals);
+  const x = (t) => m.l + (t - t0) / (t1 - t0) * (W - m.l - m.r);
+  const y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+
+  const s = svg("svg", {viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": `Price history for ${item.brand} ${item.model}`});
+  drawAxes(s, {W, H, m, t0, t1, ticks, x, y});
+  const step = (key) => {
+    const pts = ser.filter((p) => p[key] != null);
+    if (!pts.length) return "";
+    let d = `M${x(pts[0].t)},${y(pts[0][key])}`;
+    for (const p of pts.slice(1)) d += `H${x(p.t)}V${y(p[key])}`;
+    return d;
+  };
+  if (ser.some((p) => p.l != null && p.l !== p.p))
+    s.append(svg("path", {d: step("l"), fill: "none", stroke: "var(--axis)", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+  if (ser.length > 1)
+    s.append(svg("path", {d: step("p"), fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+  const last = ser[ser.length - 1];
+  s.append(marker(shapeOf(item), x(last.t), y(last.p), col));
+  const endLab = svg("text", {x: x(last.t) + 9, y: y(last.p) + 4, fill: "var(--ink)", "font-size": 12, "font-weight": 600});
+  endLab.textContent = usd(last.p);
+  s.append(endLab);
+
+  // crosshair + tooltip
+  const cross = svg("line", {y1: m.t, y2: H - m.b, stroke: "var(--baseline)", "stroke-width": 1, visibility: "hidden"});
+  const dot = svg("circle", {r: 4, fill: col, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden"});
+  const hit = svg("rect", {x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent", tabindex: "0"});
+  s.append(cross, dot, hit);
+  const show = (p) => {
+    cross.setAttribute("x1", x(p.t)); cross.setAttribute("x2", x(p.t)); cross.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", x(p.t)); dot.setAttribute("cy", y(p.p)); dot.setAttribute("visibility", "visible");
+    tip.replaceChildren(
+      el("div", {class: "t-date", text: fmtDateY(p.d)}),
+      el("div", {class: "t-row"}, [el("i", {class: "k", style: `border-top-color: ${col}`}), el("b", {text: usd(p.p, 2)}), el("span", {class: "ink2", text: "Price"})]),
+      el("div", {class: "t-row"}, [el("i", {class: "k list"}), el("b", {text: usd(p.l ?? p.p, 2)}), el("span", {class: "ink2", text: "List price"})]),
+      el("div", {class: "t-row"}, [el("span", {class: "ink2", text: p.s === "no" ? "Out of stock" : p.s === "yes" ? "In stock" : ""})]),
+    );
+    tip.style.display = "block";
+    const px = x(p.t) / W * box.clientWidth;
+    tip.style.left = Math.min(Math.max(px + 12, 0), box.clientWidth - tip.offsetWidth) + "px";
+    tip.style.top = "8px";
+  };
+  const nearest = (clientX) => {
+    const r = s.getBoundingClientRect();
+    const t = t0 + ((clientX - r.left) / r.width * W - m.l) / (W - m.l - m.r) * (t1 - t0);
+    return ser.reduce((a, b) => Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a);
+  };
+  hit.addEventListener("pointermove", (e) => show(nearest(e.clientX)));
+  hit.addEventListener("pointerleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+  hit.addEventListener("focus", () => show(last));
+  hit.addEventListener("blur", () => { tip.style.display = "none"; });
+  box.append(s);
+
+  const prices = ser.map((p) => p.p);
+  const facts = [
+    ["Now", usd(item.price)],
+    ["Low", usd(Math.min(...prices))],
+    ["High", usd(Math.max(...prices))],
+    ["First seen", `${usd(item.first_price)} · ${fmtDate(item.first_date)}`],
+    ["Last change", item.last_change ? `${signed(item.last_change.to - item.last_change.from)} · ${fmtDate(item.last_change.date)}` : "None yet"],
+  ];
+  for (const [k, v] of facts) $("c-facts").append(el("div", {}, [document.createTextNode(k), el("b", {text: v})]));
+}
+
+// ---------------------------------------------------------------- side lists
+function renderChanges(rows) {
+  const keep = new Set(rows.map((i) => i.brand + "|" + i.model));
+  const ul = $("changes"); ul.replaceChildren();
+  const list = DATA.changes.filter((c) => keep.has(c.brand + "|" + c.model)).slice(0, 20);
+  if (!list.length) {
+    ul.append(el("li", {class: "empty", text: DATA.days < 2 ? "Changes appear once there are two days of data." : "No changes for these filters."}));
+    return;
+  }
+  for (const c of list) {
+    const what = c.kind === "price"
+      ? `${usd(c.from)} → ${usd(c.to)} (${c.pct > 0 ? "+" : ""}${c.pct}%)`
+      : c.to === "no" ? "went out of stock" : "back in stock";
+    ul.append(el("li", {}, [
+      el("span", {}, [el("span", {class: "ink2", text: c.brand + " "}), el("span", {text: c.model}), el("span", {class: "ink2", text: " · " + what})]),
+      el("span", {class: "when", text: fmtDate(c.date)}),
+    ]));
+  }
+}
+function renderStatic() {
+  const nu = $("new");
+  if (!DATA.new_listings.length) nu.append(el("li", {class: "empty", text: "None yet. The first run recorded every store's current lineup as the baseline."}));
+  for (const l of DATA.new_listings) {
+    nu.append(el("li", {}, [
+      el("span", {}, [el("span", {class: "ink2", text: l.brand + " "}), el("a", {href: l.url, target: "_blank", rel: "noopener", text: l.title})]),
+      el("span", {class: "when", text: fmtDate(l.first_seen)}),
+    ]));
+  }
+  const hl = $("health");
+  $("health-sub").textContent = DATA.errors.length
+    ? `${DATA.errors.length} of ${items.length} printers failed on the last run`
+    : `All ${items.length} printers read on the last run`;
+  if (!DATA.errors.length) hl.append(el("li", {}, [el("span", {class: "status"}, [statusIcon(true), el("span", {text: "No errors"})])]));
+  for (const e of DATA.errors) {
+    hl.append(el("li", {}, [
+      el("div", {}, [
+        el("span", {class: "status"}, [statusIcon(false), el("span", {text: `${e.brand} ${e.model}`})]),
+        el("div", {class: "err", text: e.error}),
+      ]),
+      el("span", {class: "when", text: e.last_ok ? "last ok " + fmtDate(e.last_ok) : "never read"}),
+    ]));
+  }
+  $("foot").textContent = `Prices in USD from official US stores, captured daily by the competitor price tracker. ` +
+    `"Price" is what the product page shows a US shopper (sale price); "List" is the struck-through regular price where shown. ` +
+    `Bundles, resin add-ons and non-US plug variants are excluded. ${ref ? `"vs ${ref.short}" is the difference from ${ref.name} at ${usd(ref.price)}. ` : ""}` +
+    `Generated ${DATA.generated}.`;
+}
+
+// ---------------------------------------------------------------- model picker
+function renderPickerCount() {
+  const n = state.chart.length;
+  $("pick-label").textContent = n ? `Choose models (${n})` : "Choose models";
+  $("pick-count").textContent = `${n} of ${items.length} selected`;
+}
+function renderPickerList() {
+  const list = $("pick-list"), keepScroll = list.scrollTop;
+  const q = $("pick-q").value.trim().toLowerCase();
+  list.replaceChildren();
+  for (const b of [...new Set(items.map((i) => i.brand))].sort()) {
+    const all = items.filter((i) => i.brand === b);
+    const models = !q || b.toLowerCase().includes(q) ? all : all.filter((i) => (b + " " + i.model).toLowerCase().includes(q));
+    if (!models.length) continue;
+    const on = all.filter((i) => inChart(i.id)).length;
+    const cb = el("input", {type: "checkbox", "aria-label": `Chart all ${b} printers`});
+    cb.checked = on === all.length;
+    cb.indeterminate = on > 0 && on < all.length;
+    cb.addEventListener("change", () => toggleGroup(all));
+    list.append(el("label", {class: "pick-brand"}, [cb, el("span", {text: b}), el("span", {class: "cnt", text: `${on}/${all.length}`})]));
+    for (const i of models) {
+      const c = el("input", {type: "checkbox"});
+      c.checked = inChart(i.id);
+      c.addEventListener("change", () => toggleChart(i.id));
+      const ks = el("span", {class: "keyslot"});
+      if (inChart(i.id)) ks.append(seriesKey(i));
+      list.append(el("label", {class: "pick-row" + (inChart(i.id) ? " on" : "")},
+        [c, ks, el("span", {class: "nm", text: i.model}), el("span", {class: "pr", text: usd(i.price)})]));
+    }
+  }
+  if (!list.childElementCount) list.append(el("div", {class: "empty", text: "No matches."}));
+  list.scrollTop = keepScroll;
+}
+function openPicker(open) {
+  $("pick-pop").hidden = !open;
+  $("pick-btn").setAttribute("aria-expanded", String(open));
+  if (open) { renderPickerList(); $("pick-q").focus(); }
+}
+$("pick-btn").addEventListener("click", () => openPicker($("pick-pop").hidden));
+$("pick-q").addEventListener("input", renderPickerList);
+document.addEventListener("pointerdown", (e) => { if (!$("pick-pop").hidden && !e.target.closest("#picker")) openPicker(false); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("pick-pop").hidden) { openPicker(false); $("pick-btn").focus(); }
+});
+for (const b of document.querySelectorAll(".pop-actions [data-act]")) {
+  b.addEventListener("click", () => {
+    const ids = b.dataset.act === "key" ? keyIds() : b.dataset.act === "table" ? filtered().map((i) => i.id) : [];
+    setChart(ids);
+    if (ids.length > MAX_SERIES) flashCount();
+    renderAll();
+  });
+}
+
+// ---------------------------------------------------------------- render
+function renderChartArea() {
+  const chosen = state.chart.map((id) => items[id]);
+  if (chosen.length === 1) renderChart(chosen[0]);
+  else renderMultiChart(chosen);
+}
+function renderAll() {
+  const rows = sortRows(filtered());
+  renderHead(rows);
+  renderTable(rows);
+  syncTopScroll();
+  renderChartArea();
+  renderChanges(rows);
+  renderPickerCount();
+  if (!$("pick-pop").hidden) renderPickerList();
+  saveChart();
+}
+renderStatic();
+if (!loadChart()) setChart(keyIds());
+renderAll();
+let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { renderChartArea(); syncTopScroll(); }, 120); });
+</script>
+</body>
+</html>
